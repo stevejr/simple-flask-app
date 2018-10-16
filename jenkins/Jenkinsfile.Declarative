@@ -1,0 +1,126 @@
+def pomObject
+def podLabel = "worker-${UUID.randomUUID().toString()}"
+
+pipeline {
+    agent{
+        kubernetes {
+            label podLabel
+            cloud 'kubernetes'
+            defaultContainer 'jnlp'
+            yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: simple-flask-app
+spec:
+  containers:
+  #Java agent, test executor
+  - name: jnlp
+    image: jenkins/jnlp-slave:alpine
+    command:
+    - /bin/sh
+    args:
+    - -c
+    - umask 0000; jenkins-slave
+    resources:
+      limits:
+        memory: 512Mi
+    workingDir: /home/jenkins
+    env:
+    - name: JNLP_MAX_HEAP_UPPER_BOUND_MB
+      value: 64
+    volumeMounts:
+    - mountPath: '/checkout'
+      name: checkout
+    - mountPath: '/var/run/docker.sock'
+      name: docker-sock
+  #alpine-utils
+  - name: alpine-utils
+    image: stevejr/alpine-utils:1.0
+    tty: true
+    command:
+    - /bin/sh
+    args:
+    - -c
+    - cat
+    resources:
+      limits:
+        memory: 256Mi
+    workingDir: /home/jenkins
+    volumeMounts:
+    - mountPath: '/checkout'
+      name: checkout
+    - mountPath: '/var/run/docker.sock'
+      name: docker-sock
+  volumes:
+  - name: checkout
+    emptyDir: {}
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+'''
+        }
+    }
+
+    environment {
+        APP_NAME = "${env.JOB_NAME}"
+        BUILD_DATE = sh (returnStdout: true, script: "date -u +'%Y-%m-%dT%H:%M:%SZ'").trim()
+        MAVEN_OPTIONS = '-DskipTests=true'
+        REGISTRY_URL = "https://${DTR_REGISTRY}"
+        SHORTREV = ''
+        TAG = ''
+    }
+    options {
+        skipDefaultCheckout true
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                container('alpine-utils') {
+                    dir('/checkout/simple-flask-app') {
+                        sh 'ls -ltra'
+                        sh 'git clone https://github.com/stevejr/simple-flask-app .'
+                        script {
+                            SHORTREV = sh (returnStdout: true, script: 'git rev-parse --short HEAD').trim()
+                            TAG = "${SHORTREV}-${env.BUILD_NUMBER}"
+                        }
+                        sh 'ls -ltra'
+                        println "SHORTREV: ${SHORTREV}"
+                        println "TAG: ${TAG}"
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                container('alpine-utils') {
+                    dir('/checkout/simple-flask-app') {
+                        sh 'env'
+                        sh 'pwd && ls -ltra'
+                        sh """
+                            docker build --no-cache=true --build-arg BUILD_DATE=${BUILD_DATE} --build-arg VCS_REF=${SHORTREV} --build-arg BUILD_VERSION=${TAG} -t ${APP_NAME}:${TAG} .
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                container('alpine-utils') {
+                    withCredentials([usernamePassword(credentialsId: 'jenkins', passwordVariable: 'REGISTRY_PASS', usernameVariable: 'REGISTRY_USER')]) {
+                        sh """
+                            docker login -u ${REGISTRY_USER} -p ${REGISTRY_PASS} ${REGISTRY_URL}
+                            docker image tag ${APP_NAME}:${TAG} ${DTR_REGISTRY}/jenkins/${APP_NAME}:${TAG}
+                            docker image push ${DTR_REGISTRY}/${REGISTRY_USER}/${APP_NAME}:${TAG}
+                            docker image rm ${DTR_REGISTRY}/${REGISTRY_USER}/${APP_NAME}:${TAG}
+                        """
+                    }
+                }
+            }
+        }
+    }
+}
