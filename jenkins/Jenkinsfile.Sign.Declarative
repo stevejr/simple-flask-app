@@ -78,8 +78,7 @@ spec:
         stage('Setup Docker Config') {
             steps {
                 container('alpine-utils') {
-                    withCredentials([[$class: 'FileBinding', credentialsId: 'dct_repo_key', variable: 'REPOSITORY_SIGNING_KEY'],
-                        [$class: 'FileBinding', credentialsId: 'dct_repo_key_prod', variable: 'REPOSITORY_SIGNING_KEY_PROD'],
+                    withCredentials([[$class: 'FileBinding', credentialsId: 'devops_simple_flask_app_repo', variable: 'REPOSITORY_SIGNING_KEY'],
                         [$class: 'FileBinding', credentialsId: 'dct_signing_key', variable: 'DCT_SIGNING_KEY'],
                         [$class: 'FileBinding', credentialsId: 'dct_signing_cert', variable: 'DCT_SIGNING_CERT'],
                         [$class: 'FileBinding', credentialsId: 'ca.crt', variable: 'DTR_CA_CRT']]) {
@@ -119,8 +118,6 @@ spec:
                     withCredentials([[$class: 'StringBinding', credentialsId: 'dct_root_passphrase', variable: 'ROOT_SIGNING_PASSPHRASE'],
                         [$class: 'StringBinding', credentialsId: 'dct_repo_passphrase', variable: 'REPOSITORY_SIGNING_PASSPHRASE'],
                         [$class: 'StringBinding', credentialsId: 'dct_delegation_passphrase', variable: 'DELEGATION_PASSPHRASE'],
-                        [$class: 'FileBinding', credentialsId: 'dct_repo_key', variable: 'REPOSITORY_SIGNING_KEY'],
-                        [$class: 'FileBinding', credentialsId: 'ca.crt', variable: 'DTR_CA_CRT'],
                         [$class: 'UsernamePasswordMultiBinding', credentialsId: 'jenkins', usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_PASS']]) {
 
                         withEnv(["DOCKER_CONTENT_TRUST=1",
