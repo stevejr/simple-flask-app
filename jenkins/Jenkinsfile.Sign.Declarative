@@ -88,7 +88,6 @@ spec:
                         }
                         dir('/checkout/.docker/trust/private') {
                             sh 'cp -p "$REPOSITORY_SIGNING_KEY" .'
-                            sh 'cp -p "$REPOSITORY_SIGNING_KEY_PROD" .'
                         }
                         dir('/checkout/.docker') {
                             sh 'cp -p "$DCT_SIGNING_KEY" key.pem'
